@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Doomlink</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f5f8ff;color:#10234f}header{height:70px;background:#fff;border-bottom:1px solid #e3eaf6;display:flex;align-items:center;justify-content:space-between;padding:0 6%;position:sticky;top:0}.brand{font-size:24px;font-weight:900;color:#1558db}.brand span{color:#ff5b19}.btn{border:0;border-radius:10px;padding:11px 16px;font-weight:700;cursor:pointer}.primary{background:linear-gradient(90deg,#0668ff,#ff5b19);color:#fff}.outline{background:#eef4ff;color:#1558db}.wrap{max-width:900px;margin:35px auto;padding:0 18px}.card{background:#fff;border:1px solid #e1e8f4;border-radius:18px;padding:22px;margin-bottom:18px;box-shadow:0 8px 30px #123b7212}.muted{color:#71809b}.auth{max-width:430px;margin:70px auto}.input,textarea{width:100%;padding:13px;margin:7px 0;border:1px solid #d5dfef;border-radius:10px;font:inherit}textarea{min-height:100px;resize:vertical}.hidden{display:none}.post{border-top:1px solid #e6ecf5;padding-top:16px;margin-top:16px}.name{font-weight:800}.error{color:#c62828;font-weight:700;margin-top:10px}.ok{color:#08704c;font-weight:700;margin-top:10px}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Doom<span>link</span></div>
+  <div id="nav"></div>
+</header>
+
+<main class="wrap">
+  <section id="authView" class="auth card">
+    <h1 id="authTitle">Créer un compte</h1>
+    <p class="muted">Bienvenue sur la première version connectée de Doomlink.</p>
+    <input id="name" class="input" placeholder="Nom complet">
+    <input id="email" class="input" type="email" placeholder="Adresse e-mail">
+    <input id="password" class="input" type="password" placeholder="Mot de passe (6 caractères minimum)">
+    <button id="authBtn" class="btn primary" style="width:100%;margin-top:8px">Créer mon compte</button>
+    <button id="switch" class="btn outline" style="width:100%;margin-top:10px">J'ai déjà un compte</button>
+    <div id="authMsg"></div>
+  </section>
+
+  <section id="feedView" class="hidden">
+    <div class="card">
+      <h2>Quoi de neuf ?</h2>
+      <textarea id="content" placeholder="Partagez quelque chose avec votre communauté..."></textarea>
+      <button id="publish" class="btn primary">Publier</button>
+      <div id="postMsg"></div>
+    </div>
+    <div class="card">
+      <h2>Fil d'actualité</h2>
+      <div id="posts"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+let loginMode=false;
+const $=id=>document.getElementById(id);
+function token(){return localStorage.getItem("doomlink_token")}
+function setMsg(el,text,ok=false){el.className=ok?"ok":"error";el.textContent=text}
+function showFeed(user){
+  $("authView").classList.add("hidden"); $("feedView").classList.remove("hidden");
+  $("nav").innerHTML=`<span style="margin-right:12px">Bonjour, ${escapeHtml(user.name)}</span><button class="btn outline" onclick="logout()">Déconnexion</button>`;
+  loadPosts();
+}
+function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&#39;","'":"&#39;"}[c]))}
+async function api(url,options={}){options.headers={...(options.headers||{}),"Content-Type":"application/json"};if(token())options.headers.Authorization="Bearer "+token();const r=await fetch(url,options);const data=await r.json();if(!r.ok)throw new Error(data.error||"Erreur");return data}
+async function boot(){
+  if(!token())return;
+  try{const d=await api("/api/me");showFeed(d.user)}catch{localStorage.removeItem("doomlink_token")}
+}
+$("authBtn").onclick=async()=>{
+  $("authMsg").textContent="";
+  try{
+    const body=loginMode?{email:$("email").value,password:$("password").value}:{name:$("name").value,email:$("email").value,password:$("password").value};
+    const d=await api(loginMode?"/api/login":"/api/register",{method:"POST",body:JSON.stringify(body)});
+    localStorage.setItem("doomlink_token",d.token);showFeed(d.user);
+  }catch(e){setMsg($("authMsg"),e.message)}
+};
+$("switch").onclick=()=>{
+  loginMode=!loginMode;
+  $("authTitle").textContent=loginMode?"Se connecter":"Créer un compte";
+  $("authBtn").textContent=loginMode?"Se connecter":"Créer mon compte";
+  $("switch").textContent=loginMode?"Créer un compte":"J'ai déjà un compte";
+  $("name").classList.toggle("hidden",loginMode);
+};
+$("publish").onclick=async()=>{
+  try{await api("/api/posts",{method:"POST",body:JSON.stringify({content:$("content").value})});$("content").value="";setMsg($("postMsg"),"Publication ajoutée.",true);loadPosts()}catch(e){setMsg($("postMsg"),e.message)}
+};
+async function loadPosts(){
+  const d=await api("/api/posts");
+  $("posts").innerHTML=d.posts.length?d.posts.map(p=>`<div class="post"><div class="name">${escapeHtml(p.name)}</div><div class="muted">${new Date(p.created_at).toLocaleString("fr-FR")}</div><p>${escapeHtml(p.content)}</p></div>`).join(""):"<p class='muted'>Aucune publication pour le moment.</p>";
+}
+function logout(){localStorage.removeItem("doomlink_token");location.reload()}
+boot();
+</script>
+</body>
+</html>
