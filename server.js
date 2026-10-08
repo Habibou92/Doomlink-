@@ -90,7 +90,9 @@ app.post("/api/posts", auth, (req,res) => {
   `).get(info.lastInsertRowid);
   res.status(201).json({post});
 });
-
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
 app.listen(PORT, () => {
   console.log(`Doomlink est lancé sur http://localhost:${PORT}`);
 });
